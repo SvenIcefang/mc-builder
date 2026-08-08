@@ -1,4 +1,4 @@
-name: Mod Builder
+name: Mod
 
 on:
   workflow_dispatch:
@@ -12,33 +12,72 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Download Minecraft Assets
+      - name: Build Modded Instance
         run: |
           pip install requests
           python -c '
-          import os, requests, zipfile
+          import os, requests
 
-          # Create instance directory
-          os.makedirs("minecraft_instance/.minecraft", exist_ok=True)
+          # Target Minecraft Version
+          mc_version = "1.21"
           
-          # Fetch version manifest
-          manifest = requests.get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json").json()
-          version_id = "1.21"
-          
-          v_url = next(v["url"] for v in manifest["versions"] if v["id"] == version_id)
-          v_data = requests.get(v_url).json()
-          
-          # Save version.json
-          with open("minecraft_instance/.minecraft/version.json", "w") as f:
-              f.write(requests.get(v_url).text)
+          # Create base directory structure
+          mods_dir = "minecraft_instance/.minecraft/mods"
+          os.makedirs(mods_dir, exist_ok=True)
 
-          print(f"Downloaded metadata for Minecraft {version_id}")
+          # List of Modrinth Slugs (FO Performance Stack + Your Requested Mods)
+          mod_slugs = [
+              # Fabulously Optimized Core Performance Stack
+              "fabric-api",
+              "sodium",
+              "iris",
+              "lithium",
+              "ferrite-core",
+              "entityculling",
+              "indium",
+              "modmenu",
+              "krypton",
+              
+              # Your Custom Requested Mods
+              "3d-skin-layers",
+              "cosmetica",
+              "appleskin",
+              "jei",
+              "no-resource-pack-warnings",
+              "toggle-sprint",
+              "replaymod",
+              "simple-voice-chat",
+              "status-effect-bars"
+          ]
+
+          headers = {"User-Agent": "GitHubActions-MCBuilder/1.0"}
+
+          print("--- Starting Mod Downloads ---")
+          for slug in mod_slugs:
+              try:
+                  url = f"https://api.modrinth.com/v2/project/{slug}/version?game_versions=[\"{mc_version}\"]&loaders=[\"fabric\"]"
+                  res = requests.get(url, headers=headers).json()
+                  if res:
+                      file_info = res[0]["files"][0]
+                      file_url = file_info["url"]
+                      filename = file_info["filename"]
+                      print(f"[SUCCESS] Downloading {filename}...")
+                      r = requests.get(file_url, headers=headers)
+                      with open(os.path.join(mods_dir, filename), "wb") as f:
+                          f.write(r.content)
+                  else:
+                      print(f"[SKIP] No {mc_version} Fabric version found for: {slug}")
+              except Exception as e:
+                  print(f"[ERROR] Failed to download {slug}: {e}")
+
+          print("--- Mod Downloads Complete ---")
           '
-          
+
+          # Compress the entire instance into a single zip
           zip -r fabric_instance.zip minecraft_instance
 
       - name: Upload Zip Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fabric-minecraft-instance
+          name: fabric-modded-instance
           path: fabric_instance.zip
