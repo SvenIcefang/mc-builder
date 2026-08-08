@@ -1,0 +1,25 @@
+name: Download Minecraft Instance
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Download Minecraft Assets
+        run: |
+          pip install portablemc
+          portablemc --dir minecraft_instance start fabric:1.21 --download-only
+          zip -r fabric_instance.zip minecraft_instance
+
+      - name: Upload Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabric-minecraft-instance
+          path: fabric_instance.zip
