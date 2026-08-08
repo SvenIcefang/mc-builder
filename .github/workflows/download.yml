@@ -1,4 +1,4 @@
-name: Mod
+name: Build MRPack
 
 on:
   workflow_dispatch:
@@ -12,72 +12,66 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Build Modded Instance
+      - name: Create MRPack with Fabric API, Sodium, & Iris
         run: |
           pip install requests
           python -c '
-          import os, requests
+          import os, requests, json, zipfile
 
-          # Target Minecraft Version
-          mc_version = "1.21"
+          mc_version = "26.2"
+          # Only the 3 requested mods
+          mods = ["fabric-api", "sodium", "iris"]
           
-          # Create base directory structure
-          mods_dir = "minecraft_instance/.minecraft/mods"
-          os.makedirs(mods_dir, exist_ok=True)
+          overrides_dir = "pack_build/overrides/mods"
+          os.makedirs(overrides_dir, exist_ok=True)
 
-          # List of Modrinth Slugs (FO Performance Stack + Your Requested Mods)
-          mod_slugs = [
-              # Fabulously Optimized Core Performance Stack
-              "fabric-api",
-              "sodium",
-              "iris",
-              "lithium",
-              "ferrite-core",
-              "entityculling",
-              "indium",
-              "modmenu",
-              "krypton",
-              
-              # Your Custom Requested Mods
-              "3d-skin-layers",
-              "cosmetica",
-              "appleskin",
-              "jei",
-              "no-resource-pack-warnings",
-              "toggle-sprint",
-              "replaymod",
-              "simple-voice-chat",
-              "status-effect-bars"
-          ]
+          headers = {"User-Agent": "GitHubActions-MRPackBuilder/1.0"}
 
-          headers = {"User-Agent": "GitHubActions-MCBuilder/1.0"}
+          print("--- Fetching Mods: Fabric API, Sodium, Iris ---")
+          for slug in mods:
+              url = f"https://api.modrinth.com/v2/project/{slug}/version?game_versions=[\"{mc_version}\"]&loaders=[\"fabric\"]"
+              res = requests.get(url, headers=headers).json()
+              if res:
+                  file_info = res[0]["files"][0]
+                  file_url = file_info["url"]
+                  filename = file_info["filename"]
+                  print(f"Downloading {filename}...")
+                  r = requests.get(file_url, headers=headers)
+                  with open(os.path.join(overrides_dir, filename), "wb") as f:
+                      f.write(r.content)
+              else:
+                  print(f"Notice: No 26.2 tag found for {slug}")
 
-          print("--- Starting Mod Downloads ---")
-          for slug in mod_slugs:
-              try:
-                  url = f"https://api.modrinth.com/v2/project/{slug}/version?game_versions=[\"{mc_version}\"]&loaders=[\"fabric\"]"
-                  res = requests.get(url, headers=headers).json()
-                  if res:
-                      file_info = res[0]["files"][0]
-                      file_url = file_info["url"]
-                      filename = file_info["filename"]
-                      print(f"[SUCCESS] Downloading {filename}...")
-                      r = requests.get(file_url, headers=headers)
-                      with open(os.path.join(mods_dir, filename), "wb") as f:
-                          f.write(r.content)
-                  else:
-                      print(f"[SKIP] No {mc_version} Fabric version found for: {slug}")
-              except Exception as e:
-                  print(f"[ERROR] Failed to download {slug}: {e}")
+          # Write modrinth.index.json
+          index_data = {
+              "formatVersion": 1,
+              "game": "minecraft",
+              "versionId": "1.0.0",
+              "name": "Fabric 26.2 Essentials",
+              "summary": "Minecraft 26.2 Fabric with Fabric API, Sodium, and Iris",
+              "files": [],
+              "dependencies": {
+                  "minecraft": mc_version,
+                  "fabric-loader": "0.19.3"
+              }
+          }
 
-          print("--- Mod Downloads Complete ---")
+          with open("pack_build/modrinth.index.json", "w") as f:
+              json.dump(index_data, f, indent=2)
+
+          # Compress into .mrpack format
+          with zipfile.ZipFile("Fabric_26_2_Essentials.mrpack", "w", zipfile.ZIP_DEFLATED) as zf:
+              for root, _, files in os.walk("pack_build"):
+                  for file in files:
+                      full_path = os.path.join(root, file)
+                      rel_path = os.path.relpath(full_path, "pack_build")
+                      zf.write(full_path, rel_path)
+
+          print("--- .mrpack creation complete ---")
           '
 
-          # Compress the entire instance into a single zip
-          zip -r fabric_instance.zip minecraft_instance
-
-      - name: Upload Zip Artifact
+      - name: Upload .mrpack Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fabric-modded-instance
-          path: fabric_instance.zip
+          name: Fabric_26_2_Essentials_MRPack
+          path: Fabric_26_2_Essentials.mrpack
