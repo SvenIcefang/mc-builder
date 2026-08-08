@@ -10,12 +10,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
 
       - name: Download Minecraft Assets
         run: |
           pip install portablemc
-          portablemc --dir minecraft_instance start fabric:1.21 --download-only
+          portablemc --dir minecraft_instance start fabric:1.21 --no-launch
           zip -r fabric_instance.zip minecraft_instance
 
       - name: Upload Zip Artifact
