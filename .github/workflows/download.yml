@@ -1,4 +1,4 @@
-name: Download Minecraft Instance
+name: Mod Builder
 
 on:
   workflow_dispatch:
@@ -14,8 +14,27 @@ jobs:
 
       - name: Download Minecraft Assets
         run: |
-          pip install portablemc
-          portablemc --dir minecraft_instance start fabric:1.21 --no-launch
+          pip install requests
+          python -c '
+          import os, requests, zipfile
+
+          # Create instance directory
+          os.makedirs("minecraft_instance/.minecraft", exist_ok=True)
+          
+          # Fetch version manifest
+          manifest = requests.get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json").json()
+          version_id = "1.21"
+          
+          v_url = next(v["url"] for v in manifest["versions"] if v["id"] == version_id)
+          v_data = requests.get(v_url).json()
+          
+          # Save version.json
+          with open("minecraft_instance/.minecraft/version.json", "w") as f:
+              f.write(requests.get(v_url).text)
+
+          print(f"Downloaded metadata for Minecraft {version_id}")
+          '
+          
           zip -r fabric_instance.zip minecraft_instance
 
       - name: Upload Zip Artifact
